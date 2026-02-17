@@ -1,0 +1,21 @@
+import pandas as pd
+
+# Top 100 Nifty Stocks (Hardcoded to ensure reliability without external dependency issues)
+stocks = [
+    "RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK", "HINDUNILVR", "ITC", "SBIN", "BHARTIARTL", "LICI",
+    "KOTAKBANK", "LT", "AXISBANK", "HCLTECH", "ASIANPAINT", "MARUTI", "SUNPHARMA", "TITAN", "BAJFINANCE", 
+    "ULTRACEMCO", "ONGC", "NTPC", "TATAMOTORS", "POWERGRID", "JSWSTEEL", "ADANIENT", "M&M", "COALINDIA", 
+    "WIPRO", "BAJAJFINSV", "NESTLEIND", "TATASTEEL", "IOC", "GRASIM", "TECHM", "HDFCLIFE", "BRITANNIA", 
+    "ADANIPORTS", "HINDALCO", "SBILIFE", "DRREDDY", "CIPLA", "TATACONSUM", "APOLLOHOSP", "EICHERMOT", 
+    "DIVISLAB", "BAJAJ-AUTO", "INDUSINDBK", "BPCL", "UPL", "HEROMOTOCO", "SHREECEM", "DABUR", "PIDILITIND",
+    "GODREJCP", "VEDL", "TATAPOWER", "AMBUJACEM", "SRF", "GAIL", "HAVELLS", "SBICARD", "ICICIPRULI", 
+    "MARICO", "BANKBARODA", "DLF", "EPL", "BEL", "CHOLAFIN", "SIEMENS", "BOSCHLTD", "MCDOWELL-N", 
+    "NAUKRI", "INDIGO", "PIDILITIND", "BERGEPAINT", "ICICIGI", "PNB", "TORNTPHARM", "MUTHOOTFIN", "COLPAL",
+    "DMART", "HAL", "JINDALSTEL", "LTIM", "MOTHERSON", "PIIND", "POLYCAB", "SBICARD", "SHRIRAMFIN",
+    "SOLARINDS", "SUZLON", "TIINDIA", "TRENT", "TVSMOTOR", "UNITEDBREW", "VBL", "ZOMATO", "ZYDUSLIFE"
+]
+
+# Create DataFrame
+df = pd.DataFrame(stocks, columns=['Symbol'])
+df.to_csv("nifty500.csv", index=False)
+print(f"Created nifty500.csv with {len(stocks)} stocks.")

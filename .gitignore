@@ -1,0 +1,10 @@
+.env
+__pycache__/
+active_trades.json
+bot_control.json
+bot_status.txt
+sent_history.json
+*.csv
+*.json
+!requirements.txt
+!TELEGRAM_SETUP.md
