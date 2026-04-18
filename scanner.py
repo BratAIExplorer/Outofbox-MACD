@@ -5,6 +5,7 @@ import datetime
 import concurrent.futures
 import time
 from nifty500_stocks import get_nifty_500_tickers
+from sp500_stocks import get_sp500_tickers
 
 def fetch_data_batch_old(tickers, period="6mo"):
     # Keeping old function for safety if needed, but the main logic is now inside scan_market or will be patched fully
@@ -43,12 +44,15 @@ def find_crossover_date(macd_line, signal_line):
         # print(f"Crossover check error: {e}")
         return None
 
-def analyze_stock(ticker, df):
+def analyze_stock(ticker, df, market="NSE"):
     """
     Analyzes a single stock dataframe for Technical Criteria using 'ta' library.
     """
     try:
-        if len(df) < 200: return None # Need enough data for 200 SMA
+        if len(df) < 200: return None  # Need enough data for 200 SMA
+
+        # Market-aware penny stock threshold (B5)
+        is_penny = False
         
         # Ensure Close column is 1D Series
         close = df['Close']
@@ -123,19 +127,41 @@ def analyze_stock(ticker, df):
         resistance_level = min(resistances, key=lambda x: x[0])[0] if resistances else current_price * 1.05
         resistance_desc = min(resistances, key=lambda x: x[0])[1] if resistances else "Blue Sky"
         
+        # Market-aware penny stock classification (Task B5)
+        is_penny = (
+            (market == "NSE" and current_price < 10) or
+            (market == "US" and current_price < 1)
+        )
+
+        # Strip .NS suffix for DB storage (store clean symbol e.g. "HDFC" not "HDFC.NS")
+        clean_symbol = ticker.replace(".NS", "") if market == "NSE" else ticker
+
         return {
-            "Symbol": ticker,
-            "Price": current_price,
-            "RSI": get_val(latest['RSI']),
-            "MACD_Cross_Date": crossover_date,
-            "Above_20DMA": above_20,
-            "Above_50DMA": above_50,
-            "Support": f"{support_level:.2f} ({support_desc})",
-            "Resistance": f"{resistance_level:.2f} ({resistance_desc})",
-            "SMA_20": sma20,
-            "SMA_50": sma50,
-            "SMA_100": sma100,
-            "SMA_200": sma200
+            "symbol": clean_symbol,
+            "price": current_price,
+            "rsi": get_val(latest['RSI']),
+            "macd_cross_date": crossover_date,
+            "above_20dma": above_20,
+            "above_50dma": above_50,
+            "support": f"{support_level:.2f} ({support_desc})",
+            "resistance": f"{resistance_level:.2f} ({resistance_desc})",
+            "sma_20": sma20,
+            "sma_50": sma50,
+            "sma_100": sma100,
+            "sma_200": sma200,
+            "is_penny": is_penny,
+            # DB contract fields
+            "mb_score": 0,        # Placeholder — MB scoring not yet ported
+            "mb_tier": "Builder", # Default tier
+            "total_score": 0,
+            "sector": "Unknown",
+            "category": "STANDARD",
+            "l1": above_20,       # Price > 20 DMA
+            "l2": above_50,       # Price > 50 DMA
+            "l3": bool(get_val(latest['RSI']) > 50) if get_val(latest['RSI']) else False,
+            "l4": bool(macd_val > 0),
+            "l5": bool(macd_val > sig_val),
+            "l6": False,          # Reserved for future criteria
         }
         
     except Exception as e:
@@ -195,44 +221,63 @@ def fetch_data_batch(tickers, period="1y", progress_callback=None):
             
     return data_dict
 
-def scan_market(progress_callback=None):
-    tickers = get_nifty_500_tickers()
-    
+def scan_market(market: str = "NSE", progress_callback=None):
+    """
+    Runs the technical scanner for the given market.
+    market: "NSE" | "US"
+    Returns a list of dicts with DB-ready fields.
+    """
+    if market == "NSE":
+        tickers = get_nifty_500_tickers()
+    elif market == "US":
+        tickers = get_sp500_tickers()
+    else:
+        raise ValueError(f"Unknown market: {market}. Use 'NSE' or 'US'.")
+
+    print(f"[{market}] Loaded {len(tickers)} tickers.")
+
     # 1. Fetch Data
-    if progress_callback: progress_callback(0.05, "Starting Data Download...")
+    if progress_callback: progress_callback(0.05, f"[{market}] Starting Data Download...")
     data = fetch_data_batch(tickers, progress_callback=progress_callback)
-    
+
     results = []
     total_stocks = len(data)
-    if total_stocks == 0: return []
+    if total_stocks == 0:
+        print(f"[{market}] No data fetched — aborting.")
+        return []
 
     # 2. Parallel Analysis
-    if progress_callback: progress_callback(0.4, "Analyzing Indicators...")
-    
+    if progress_callback: progress_callback(0.4, f"[{market}] Analyzing Indicators...")
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-        future_to_stock = {executor.submit(analyze_stock, ticker, df): ticker for ticker, df in data.items()}
-        
+        future_to_stock = {
+            executor.submit(analyze_stock, ticker, df, market): ticker
+            for ticker, df in data.items()
+        }
+
         completed = 0
         for future in concurrent.futures.as_completed(future_to_stock):
             res = future.result()
             if res:
                 results.append(res)
-            
-            # Update progress check
+
             completed += 1
             if progress_callback and completed % 50 == 0:
-                 prog = 0.4 + (0.5 * (completed / total_stocks))
-                 progress_callback(prog, f"Analyzed {completed}/{total_stocks}")
-                 
+                prog = 0.4 + (0.5 * (completed / total_stocks))
+                progress_callback(prog, f"[{market}] Analyzed {completed}/{total_stocks}")
+
     # Sort by Latest Crossover Date desc
-    results.sort(key=lambda x: x['MACD_Cross_Date'], reverse=True)
-    
+    results.sort(key=lambda x: x['macd_cross_date'], reverse=True)
+
     if progress_callback: progress_callback(1.0, "Done!")
+    print(f"[{market}] Scan produced {len(results)} results.")
     return results
 
 if __name__ == "__main__":
-    print("Running usage test...")
-    hits = scan_market()
+    import sys
+    market_arg = sys.argv[1] if len(sys.argv) > 1 else "NSE"
+    print(f"Running usage test for market: {market_arg}")
+    hits = scan_market(market=market_arg)
     print(f"Found {len(hits)} stocks matching criteria.")
     for h in hits[:5]:
         print(h)

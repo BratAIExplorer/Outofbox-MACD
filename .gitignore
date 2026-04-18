@@ -8,3 +8,6 @@ sent_history.json
 *.json
 !requirements.txt
 !TELEGRAM_SETUP.md
+# Track stock universe data files (needed for scanner)
+!nifty500.csv
+!sp500.csv

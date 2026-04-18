@@ -4,7 +4,9 @@ numpy
 ta
 requests
 python-dotenv
+psycopg2-binary
+lxml
+html5lib
+beautifulsoup4
 streamlit
 python-telegram-bot
-beautifulsoup4
-ta
